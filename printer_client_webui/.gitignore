@@ -11,6 +11,10 @@ nohup.out*
 tmp*
 *.pth
 core-*-python-*
+*ouput/
+output
+*output*
+output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
