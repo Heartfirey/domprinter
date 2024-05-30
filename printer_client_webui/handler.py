@@ -52,7 +52,7 @@ class TaskProcessor(Process):
             error = "fetch print error. [error={}]".format(e)
             logger.warning(error)
             self.queue.put(('ERROR', error))
-            return 
+            return {}
 
         if resp.status_code != 200:
             self.queue.put(('ERROR', "fetch error. [status_code={}]".format(resp.status_code)))
