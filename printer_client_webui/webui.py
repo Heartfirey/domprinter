@@ -33,6 +33,9 @@ def update_label():
                 "Print-Time": task[1]["SubmitTime"]
             })
             init_status()
+        elif task[0] == 'ERROR':
+            error_status(task[1])
+            return 
     if widget_list is not None:
         widget_list["table"].update_rows(task_done_list)
     if handler_init_status is True:
@@ -57,6 +60,22 @@ def init_status():
     widget_list['st_item_details'].text='No processing task'
     widget_list["table"].update_rows(task_done_list)
 
+def error_status(error_details: str = 'error'):
+    global widget_list
+    ui.notify(error_details, color='red', position='top', duration=3000)
+    widget_list['st_icon'].set_visibility(False)
+    widget_list['st_wait'].set_visibility(True)
+    widget_list['st_spin'].set_visibility(False)
+    widget_list['st_label'].text='ERROR'
+    widget_list['st_bdg'].props('color=positive')
+    widget_list['st_bdg_icon'].name='sym_r_autorenew'
+    widget_list['st_bdg_label'].text='Not Connected'
+    widget_list['st_item_icon'].name='sym_r_print'
+    widget_list['st_item_icon'].props('color=teal-14')
+    widget_list['st_item_name'].text='No tasks'
+    widget_list['st_item_details'].text=str(error_details)
+    widget_list["table"].update_rows(task_done_list)
+
 def refresh_status(task_id: int = 0, task_details: str = 'test'):
     global widget_list
     widget_list['st_icon'].set_visibility(False)
@@ -79,8 +98,8 @@ def main_page():
     global widget_list
     add_basic_layout()
     widget_list = add_main_content(cfg)
-    
-    
+
+
 if __name__ in {"__main__", "__mp_main__"}:
     if __name__ == "__main__":
         task_queue = Queue()
@@ -90,9 +109,7 @@ if __name__ in {"__main__", "__mp_main__"}:
     ui.run(
         title="Domprinter-Client",
         favicon="./static/favicon.png",
-        host=cfg['listen_host'], 
-        port=cfg['listen_port'], 
+        host=cfg['listen_host'],
+        port=cfg['listen_port'],
         reload=cfg['auto_reload'],
     )
-    
-    

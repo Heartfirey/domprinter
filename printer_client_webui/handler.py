@@ -34,7 +34,7 @@ class TaskProcessor(Process):
         self.location_filter_list = config.get("filter_list", [])
         ensure_dir(OUTPUT_PATH)
         logger.info("TaskProcessor has been initialized.")
-    
+
     @classmethod
     def make_base_url(cls, config):
         return "http://{}:{}@{}:{}/print-task".format(
@@ -43,14 +43,23 @@ class TaskProcessor(Process):
             config['service_host'],
             config['service_port']
         )
-    
+
     def fetch_task(self):
         local_url = self.base_url + "?TaskState=1&LimitTaskNum=32"
-        resp = requests.get(local_url, headers=HEADERS, verify=False, timeout=10)
+        try:
+            resp = requests.get(local_url, headers=HEADERS, verify=False, timeout=10)
+        except Exception as e:
+            error = "fetch print error. [error={}]".format(e)
+            logger.warning(error)
+            self.queue.put(('ERROR', error))
+            return 
+
         if resp.status_code != 200:
+            self.queue.put(('ERROR', "fetch error. [status_code={}]".format(resp.status_code)))
             logger.warning("fetch error. [status_code={}]".format(resp.status_code))
+
         return json.loads(resp.text)
-    
+
     def process_task(self, task):
         try:
             self.queue.put(('NEW', task))
@@ -103,17 +112,19 @@ class TaskProcessor(Process):
             self.done_task(print_task_id)
             self.queue.put(('DONE', task))
         except Exception as e:
+            self.queue.put(('ERROR', "handle print task error. [error={}]".format(e)))
             logger.error("handle print task error. [error={}]".format(e))
-        
+
     def done_task(self, task_id):
         resp = requests.patch(
         self.base_url, {"TaskState": 2, "PrintTaskIDList": [task_id]}, verify=False)
 
         if resp.status_code != 200:
-            logger.error("done error. [task_id={}] [status_code={}]".format(task_id, resp.status_code))
+            self.queue.put(('ERROR', "done error. [status_code={}]".format(resp.status_code)))
+            logger.warning("done error. [status_code={}]".format(resp.status_code))
 
         return resp
-    
+
     def run(self):
         self.queue.put(('INIT', 'INIT'))
         logger.info("Start pulling the task list...")
@@ -130,4 +141,3 @@ class TaskProcessor(Process):
                 logger.error("Error: {}".format(e))
             finally:
                 time.sleep(self.refresh_interval)
-    
