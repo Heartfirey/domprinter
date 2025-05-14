@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import typst
@@ -15,7 +16,7 @@ HEADERS = {'content-type': 'application/json'}
 CUR_DIR = os.path.dirname(os.path.realpath(__file__))
 OUTPUT_PATH = os.path.join(CUR_DIR, "output")
 
-PRINT_HEADER = """2024 Jiangxi Provincial Collegiate Programming Contest - TechGroup
+PRINT_HEADER = """{}
 座位：{}
 队伍：{}
 提交时间：{}
@@ -31,10 +32,11 @@ class TaskProcessor(Process):
         self.queue = queue
         self.refresh_interval = config.get("refresh_interval", 5)
         self.base_url = self.make_base_url(config)
-        self.location_filter_list = config.get("filter_list", [])
+        self.location_filter_list = list(map(re.compile, config.get("filter_list", [])))
+        self.contest_name = config.get("contest_name", "Placeholder")
         ensure_dir(OUTPUT_PATH)
         logger.info("TaskProcessor has been initialized.")
-    
+
     @classmethod
     def make_base_url(cls, config):
         return "http://{}:{}@{}:{}/print-task".format(
@@ -43,14 +45,14 @@ class TaskProcessor(Process):
             config['service_host'],
             config['service_port']
         )
-    
+
     def fetch_task(self):
         local_url = self.base_url + "?TaskState=1&LimitTaskNum=32"
         resp = requests.get(local_url, headers=HEADERS, verify=False, timeout=10)
         if resp.status_code != 200:
             logger.warning("fetch error. [status_code={}]".format(resp.status_code))
         return json.loads(resp.text)
-    
+
     def process_task(self, task):
         try:
             self.queue.put(('NEW', task))
@@ -59,7 +61,12 @@ class TaskProcessor(Process):
             team_name = task["TeamName"]
             team_id = task["TeamID"]
             location = task["Location"]
-            if location.split('-')[0] not in self.location_filter_list and self.location_filter_list[0] != "*":
+            location_match = False
+            for expr in self.location_filter_list:
+                if expr.fullmatch(location):
+                    location_match = True
+                    break
+            if not location_match:
                 logger.info("Location {} is not in the filter list, skip.".format(location))
                 return
             language = task["Language"]
@@ -88,7 +95,7 @@ class TaskProcessor(Process):
             with open(code_file_path, "w") as f:
                 f.write(source_code)
 
-            header = PRINT_HEADER.format(location, team_name, submit_time)
+            header = PRINT_HEADER.format(self.contest_name, location, team_name, submit_time)
 
             with open(typst_path, "w") as f:
                 f.write(constants.TYPST_CONFIG %
@@ -104,7 +111,7 @@ class TaskProcessor(Process):
             self.queue.put(('DONE', task))
         except Exception as e:
             logger.error("handle print task error. [error={}]".format(e))
-        
+
     def done_task(self, task_id):
         resp = requests.patch(
         self.base_url, {"TaskState": 2, "PrintTaskIDList": [task_id]}, verify=False)
@@ -113,7 +120,7 @@ class TaskProcessor(Process):
             logger.error("done error. [task_id={}] [status_code={}]".format(task_id, resp.status_code))
 
         return resp
-    
+
     def run(self):
         self.queue.put(('INIT', 'INIT'))
         logger.info("Start pulling the task list...")
@@ -130,4 +137,3 @@ class TaskProcessor(Process):
                 logger.error("Error: {}".format(e))
             finally:
                 time.sleep(self.refresh_interval)
-    
